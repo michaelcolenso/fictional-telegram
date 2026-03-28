@@ -1,0 +1,60 @@
+name: Watchlist Scanner
+
+on:
+  schedule:
+    # Every Monday at 9am UTC (1am PST / 2am PDT)
+    - cron: '0 9 * * 1'
+  workflow_dispatch:
+    inputs:
+      lookback_days:
+        description: 'Days to look back (default uses saved state)'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install httpx
+
+      - name: Run watchlist scanner
+        env:
+          DATAGOV_API_KEY: ${{ secrets.DATAGOV_API_KEY }}
+          GOVINFO_API_KEY: ${{ secrets.GOVINFO_API_KEY }}
+        run: |
+          EXTRA_ARGS=""
+          if [ -n "${{ github.event.inputs.lookback_days }}" ]; then
+            EXTRA_ARGS="--lookback-days ${{ github.event.inputs.lookback_days }}"
+          fi
+
+          python watchlist_scanner.py \
+            --state-dir ./state \
+            --output-dir ./output \
+            $EXTRA_ARGS
+
+      - name: Commit results
+        run: |
+          git config user.name "watchlist-scanner[bot]"
+          git config user.email "watchlist-scanner[bot]@users.noreply.github.com"
+          git add state/ output/
+          if git diff --staged --quiet; then
+            echo "No changes to commit."
+          else
+            LEADS=$(python -c "import json; d=json.load(open('state/scan_state.json')); print(f\"{d['last_actionable_count']} actionable leads\")")
+            git commit -m "scan $(date -u +%Y-%m-%d): ${LEADS}"
+            git push
+          fi
