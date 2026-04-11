@@ -1,6 +1,10 @@
 // Run after data load: npx tsx scripts/sitemap.ts
 // Writes public/sitemap.xml
 
+function escapeXml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
 async function main() {
   const { execSync } = await import("child_process");
   const { writeFileSync, mkdirSync } = await import("fs");
@@ -17,7 +21,11 @@ async function main() {
   const rows = parsed[0]?.results ?? [];
 
   const BASE = "https://nursinghomegrade.com";
-  const urls = [`${BASE}/`, `${BASE}/about`, ...rows.map((r) => `${BASE}/facility/${r.cms_id}-${r.slug}`)];
+  const urls = [
+    `${BASE}/`,
+    `${BASE}/about`,
+    ...rows.map((r) => `${BASE}/facility/${escapeXml(r.cms_id)}-${escapeXml(r.slug)}`),
+  ];
 
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
