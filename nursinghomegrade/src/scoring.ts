@@ -52,7 +52,7 @@ export function scoreToSummary(score: number, grade: string, rnHours: number | n
 }
 
 export function toSlug(name: string): string {
-  return name
+  return (name ?? "unknown")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");

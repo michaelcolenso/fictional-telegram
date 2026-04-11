@@ -1,20 +1,20 @@
 // Raw shape returned by CMS API
 export interface CMSFacility {
-  provnum: string;
-  provname: string;
-  address: string;
-  city: string;
+  cms_certification_number_ccn: string;
+  provider_name: string;
+  provider_address: string;
+  citytown: string;
   state: string;
-  zip: string;
+  zip_code: string;
   latitude: string;
   longitude: string;
   overall_rating: string;
-  quality_rating: string;
+  qm_rating: string;
   staffing_rating: string;
   health_inspection_rating: string;
   reported_rn_staffing_hours_per_resident_per_day: string;
   reported_total_nurse_staffing_hours_per_resident_per_day: string;
-  number_of_deficiencies: string;
+  rating_cycle_1_total_number_of_health_deficiencies: string;
   total_weighted_health_survey_score: string;
 }
 

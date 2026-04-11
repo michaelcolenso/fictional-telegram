@@ -18,8 +18,8 @@ function parseIntOrNull(val: string): number | null {
 
 export function mapCMSFacility(raw: CMSFacility): Facility {
   const rnHours = parseNum(raw.reported_rn_staffing_hours_per_resident_per_day);
-  const deficiencies = parseIntOrNull(raw.number_of_deficiencies);
-  const qualityRating = parseIntOrNull(raw.quality_rating);
+  const deficiencies = parseIntOrNull(raw.rating_cycle_1_total_number_of_health_deficiencies);
+  const qualityRating = parseIntOrNull(raw.qm_rating);
   const staffingRating = parseIntOrNull(raw.staffing_rating);
 
   const grade_score = computeGradeScore({
@@ -33,12 +33,12 @@ export function mapCMSFacility(raw: CMSFacility): Facility {
   const grade_summary = scoreToSummary(safeScore, grade_letter, rnHours);
 
   return {
-    cms_id: raw.provnum,
-    name: raw.provname,
-    address: raw.address,
-    city: raw.city,
+    cms_id: raw.cms_certification_number_ccn,
+    name: raw.provider_name,
+    address: raw.provider_address,
+    city: raw.citytown,
     state: raw.state,
-    zip: raw.zip,
+    zip: raw.zip_code,
     latitude: parseNum(raw.latitude),
     longitude: parseNum(raw.longitude),
     overall_rating: parseIntOrNull(raw.overall_rating),
@@ -50,7 +50,7 @@ export function mapCMSFacility(raw: CMSFacility): Facility {
     grade_score: safeScore,
     grade_letter,
     grade_summary,
-    slug: toSlug(raw.provname),
+    slug: toSlug(raw.provider_name ?? raw.cms_certification_number_ccn ?? "unknown"),
     updated_at: new Date().toISOString(),
   };
 }
@@ -76,15 +76,15 @@ async function main() {
 
   const sample = firstPage[0];
   const requiredFields: (keyof CMSFacility)[] = [
-    "provnum",
-    "provname",
-    "address",
-    "city",
+    "cms_certification_number_ccn",
+    "provider_name",
+    "provider_address",
+    "citytown",
     "state",
-    "zip",
+    "zip_code",
     "reported_rn_staffing_hours_per_resident_per_day",
-    "number_of_deficiencies",
-    "quality_rating",
+    "rating_cycle_1_total_number_of_health_deficiencies",
+    "qm_rating",
     "staffing_rating",
   ];
   for (const field of requiredFields) {
@@ -94,7 +94,7 @@ async function main() {
       );
     }
   }
-  console.log(`Field validation passed. Sample provnum: ${sample!.provnum}`);
+  console.log(`Field validation passed. Sample cms_certification_number_ccn: ${sample!.cms_certification_number_ccn}`);
 
   // Fetch all pages
   const allFacilities: CMSFacility[] = [...firstPage];
