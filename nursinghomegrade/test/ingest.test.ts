@@ -3,26 +3,26 @@ import { mapCMSFacility, buildFacilitySlugId } from "../scripts/ingest";
 import type { CMSFacility } from "../src/types";
 
 const SAMPLE_CMS: CMSFacility = {
-  provnum: "015001",
-  provname: "Sunrise Care Center",
-  address: "123 Main St",
-  city: "Birmingham",
+  cms_certification_number_ccn: "015001",
+  provider_name: "Sunrise Care Center",
+  provider_address: "123 Main St",
+  citytown: "Birmingham",
   state: "AL",
-  zip: "35201",
+  zip_code: "35201",
   latitude: "33.5186",
   longitude: "-86.8104",
   overall_rating: "3",
-  quality_rating: "4",
+  qm_rating: "4",
   staffing_rating: "2",
   health_inspection_rating: "3",
   reported_rn_staffing_hours_per_resident_per_day: "0.48",
   reported_total_nurse_staffing_hours_per_resident_per_day: "3.2",
-  number_of_deficiencies: "7",
+  rating_cycle_1_total_number_of_health_deficiencies: "7",
   total_weighted_health_survey_score: "45",
 };
 
 describe("mapCMSFacility", () => {
-  it("maps cms_id from provnum", () => {
+  it("maps cms_id from cms_certification_number_ccn", () => {
     const facility = mapCMSFacility(SAMPLE_CMS);
     expect(facility.cms_id).toBe("015001");
   });
@@ -55,11 +55,11 @@ describe("mapCMSFacility", () => {
       latitude: "",
       longitude: "",
       overall_rating: "",
-      quality_rating: "",
+      qm_rating: "",
       staffing_rating: "",
       health_inspection_rating: "",
       reported_rn_staffing_hours_per_resident_per_day: "",
-      number_of_deficiencies: "",
+      rating_cycle_1_total_number_of_health_deficiencies: "",
     };
     const facility = mapCMSFacility(emptyCMS);
     expect(facility.latitude).toBeNull();

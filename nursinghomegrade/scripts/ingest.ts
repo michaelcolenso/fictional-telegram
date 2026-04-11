@@ -60,7 +60,7 @@ export function buildFacilitySlugId(cmsId: string, slug: string): string {
 }
 
 async function fetchPage(offset: number): Promise<CMSFacility[]> {
-  const url = `${CMS_API_URL}?limit=${PAGE_SIZE}&offset=${offset}&sort_order=ASC&sort_by=provnum`;
+  const url = `${CMS_API_URL}?limit=${PAGE_SIZE}&offset=${offset}&sort_order=ASC&sort_by=cms_certification_number_ccn`;
   const res = await fetch(url);
   if (!res.ok) throw new Error(`CMS API error: ${res.status} at offset ${offset}`);
   const json = (await res.json()) as { results: CMSFacility[] };
