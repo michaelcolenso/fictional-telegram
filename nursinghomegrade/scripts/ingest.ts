@@ -10,7 +10,7 @@ function parseNum(val: string): number | null {
   return isNaN(n) ? null : n;
 }
 
-function parseInt2(val: string): number | null {
+function parseIntOrNull(val: string): number | null {
   if (val === "" || val === null || val === undefined) return null;
   const n = parseInt(val, 10);
   return isNaN(n) ? null : n;
@@ -18,9 +18,9 @@ function parseInt2(val: string): number | null {
 
 export function mapCMSFacility(raw: CMSFacility): Facility {
   const rnHours = parseNum(raw.reported_rn_staffing_hours_per_resident_per_day);
-  const deficiencies = parseInt2(raw.number_of_deficiencies);
-  const qualityRating = parseInt2(raw.quality_rating);
-  const staffingRating = parseInt2(raw.staffing_rating);
+  const deficiencies = parseIntOrNull(raw.number_of_deficiencies);
+  const qualityRating = parseIntOrNull(raw.quality_rating);
+  const staffingRating = parseIntOrNull(raw.staffing_rating);
 
   const grade_score = computeGradeScore({
     rnHoursPerResidentDay: rnHours ?? 0,
@@ -28,8 +28,9 @@ export function mapCMSFacility(raw: CMSFacility): Facility {
     qualityRating: qualityRating ?? 1,
     staffingRating: staffingRating ?? 1,
   });
-  const grade_letter = scoreToGrade(grade_score);
-  const grade_summary = scoreToSummary(grade_score, grade_letter, rnHours);
+  const safeScore = Number.isFinite(grade_score) ? grade_score : 0;
+  const grade_letter = scoreToGrade(safeScore);
+  const grade_summary = scoreToSummary(safeScore, grade_letter, rnHours);
 
   return {
     cms_id: raw.provnum,
@@ -40,13 +41,13 @@ export function mapCMSFacility(raw: CMSFacility): Facility {
     zip: raw.zip,
     latitude: parseNum(raw.latitude),
     longitude: parseNum(raw.longitude),
-    overall_rating: parseInt2(raw.overall_rating),
+    overall_rating: parseIntOrNull(raw.overall_rating),
     quality_rating: qualityRating,
     staffing_rating: staffingRating,
-    inspection_rating: parseInt2(raw.health_inspection_rating),
+    inspection_rating: parseIntOrNull(raw.health_inspection_rating),
     rn_hours_per_resident_day: rnHours,
     total_deficiencies: deficiencies,
-    grade_score,
+    grade_score: safeScore,
     grade_letter,
     grade_summary,
     slug: toSlug(raw.provname),
