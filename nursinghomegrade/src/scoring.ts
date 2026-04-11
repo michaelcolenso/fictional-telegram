@@ -36,10 +36,15 @@ export function scoreToGrade(score: number): string {
   return "F";
 }
 
-export function scoreToSummary(score: number, grade: string, rnHours: number): string {
+export function scoreToSummary(score: number, grade: string, rnHours: number | null): string {
+  if (rnHours === null) {
+    return `Staffing data not reported — check the facility's inspection history.`;
+  }
   const meetsMinimum = rnHours >= FEDERAL_RN_MINIMUM;
-  if (grade === "A") return `Exceeds federal staffing minimum — top tier for this state.`;
-  if (grade === "B") return `Meets federal staffing minimum — above average inspection record.`;
+  if (grade === "A")
+    return `${meetsMinimum ? "Exceeds" : "Approaches"} federal staffing minimum — top tier inspection record.`;
+  if (grade === "B")
+    return `${meetsMinimum ? "Meets" : "Near"} federal staffing minimum — above average inspection record.`;
   if (grade === "C") return `${meetsMinimum ? "Meets" : "Below"} federal staffing minimum — average inspection record.`;
   if (grade === "D")
     return `${meetsMinimum ? "Meets" : "Falls short of"} federal staffing minimum — elevated deficiency count.`;

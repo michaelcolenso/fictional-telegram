@@ -69,6 +69,12 @@ describe("scoreToSummary", () => {
     expect(typeof summary).toBe("string");
     expect(summary.length).toBeGreaterThan(10);
   });
+
+  it("handles null rnHours gracefully", () => {
+    const summary = scoreToSummary(50, "C", null);
+    expect(typeof summary).toBe("string");
+    expect(summary.length).toBeGreaterThan(10);
+  });
 });
 
 describe("toSlug", () => {
