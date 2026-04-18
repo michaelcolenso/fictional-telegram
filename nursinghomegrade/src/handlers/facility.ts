@@ -1,5 +1,5 @@
 import type { Env } from "../types";
-import { getFacilityBySlugId } from "../db";
+import { getFacilityBySlugId, getFacilityInspectionDetails } from "../db";
 import { facilityPage } from "../templates/facility";
 
 export async function handleFacility(request: Request, env: Env, slugId: string): Promise<Response> {
@@ -16,7 +16,8 @@ export async function handleFacility(request: Request, env: Env, slugId: string)
     const facility = await getFacilityBySlugId(env, slugId);
     if (!facility) return new Response("Not found", { status: 404 });
 
-    const html = facilityPage(facility);
+    const inspectionDetails = await getFacilityInspectionDetails(env, facility.cms_id);
+    const html = facilityPage({ ...facility, ...inspectionDetails });
     await env.CACHE.put(`facility:${slugId}`, html, { expirationTtl: 86400 });
     return new Response(html, {
       headers: {

@@ -1,7 +1,7 @@
-import type { Facility } from "../types";
+import type { FacilityPageData } from "../types";
 import { layout, escHtml } from "./layout";
 
-export function facilityPage(f: Facility): string {
+export function facilityPage(f: FacilityPageData): string {
   const rnHours = f.rn_hours_per_resident_day;
   const meetsMinimum = rnHours !== null && rnHours >= 0.55;
   const rnDisplay =
@@ -17,6 +17,9 @@ export function facilityPage(f: Facility): string {
     f.staffing_rating !== null
       ? `${"★".repeat(f.staffing_rating)}${"☆".repeat(5 - f.staffing_rating)} (${f.staffing_rating}/5)`
       : "Not rated";
+
+  const complaintDeficienciesCycle1 =
+    f.complaint_deficiencies_cycle_1 !== null ? String(f.complaint_deficiencies_cycle_1) : "Not reported";
 
   const body = `
     <nav style="font-size:0.875rem;color:#6b7280;margin-bottom:1.5rem;">
@@ -43,6 +46,10 @@ export function facilityPage(f: Facility): string {
       <tr style="border-bottom:1px solid #e5e7eb;">
         <td style="padding:0.6rem 0;">Health Inspection Deficiencies</td>
         <td style="padding:0.6rem 0;font-weight:600;">${f.total_deficiencies ?? "Not reported"}</td>
+      </tr>
+      <tr style="border-bottom:1px solid #e5e7eb;">
+        <td style="padding:0.6rem 0;">Complaint-based inspection deficiencies (Cycle 1)</td>
+        <td style="padding:0.6rem 0;font-weight:600;">${complaintDeficienciesCycle1}</td>
       </tr>
       <tr style="border-bottom:1px solid #e5e7eb;">
         <td style="padding:0.6rem 0;">CMS Quality Rating</td>

@@ -41,6 +41,12 @@ export interface Facility {
   updated_at: string;
 }
 
+export interface FacilityInspectionDetails {
+  complaint_deficiencies_cycle_1: number | null;
+}
+
+export type FacilityPageData = Facility & FacilityInspectionDetails;
+
 // Cloudflare Worker environment bindings
 export interface Env {
   DB: D1Database;
