@@ -59,6 +59,44 @@ export function buildFacilitySlugId(cmsId: string, slug: string): string {
   return `${cmsId}-${slug}`;
 }
 
+export function buildFacilitiesInsertBatches(mapped: Facility[], batchSize = 100): string[] {
+  const sqls: string[] = [];
+  for (let i = 0; i < mapped.length; i += batchSize) {
+    const batch = mapped.slice(i, i + batchSize);
+    const values = batch
+      .map(
+        (f) =>
+          `('${esc(f.cms_id)}','${esc(f.name)}','${esc(f.address)}','${esc(f.city)}','${esc(f.state)}','${esc(f.zip)}',${f.latitude ?? "NULL"},${f.longitude ?? "NULL"},${f.overall_rating ?? "NULL"},${f.quality_rating ?? "NULL"},${f.staffing_rating ?? "NULL"},${f.inspection_rating ?? "NULL"},${f.rn_hours_per_resident_day ?? "NULL"},${f.total_deficiencies ?? "NULL"},${f.grade_score},'${esc(f.grade_letter)}','${esc(f.grade_summary)}','${esc(f.slug)}','${esc(f.updated_at)}')`,
+      )
+      .join(",\n");
+    sqls.push(
+      `INSERT OR REPLACE INTO facilities (cms_id,name,address,city,state,zip,latitude,longitude,overall_rating,quality_rating,staffing_rating,inspection_rating,rn_hours_per_resident_day,total_deficiencies,grade_score,grade_letter,grade_summary,slug,updated_at) VALUES\n${values};`,
+    );
+  }
+  return sqls;
+}
+
+export function buildFacilityRawInsertBatches(allFacilities: CMSFacility[], batchSize = 100): string[] {
+  const ingestedAt = new Date().toISOString();
+  const sqls: string[] = [];
+  for (let i = 0; i < allFacilities.length; i += batchSize) {
+    const batch = allFacilities.slice(i, i + batchSize);
+    const values = batch
+      .map((raw) => {
+        const sourceProcessingDate =
+          typeof raw.processing_date === "string" && raw.processing_date.length > 0
+            ? `'${esc(raw.processing_date)}'`
+            : "NULL";
+        return `('${esc(raw.cms_certification_number_ccn)}','${esc(JSON.stringify(raw))}',${sourceProcessingDate},'${esc(ingestedAt)}')`;
+      })
+      .join(",\n");
+    sqls.push(
+      `INSERT OR REPLACE INTO facility_raw (cms_id, raw_json, source_processing_date, ingested_at) VALUES\n${values};`,
+    );
+  }
+  return sqls;
+}
+
 async function fetchPage(offset: number): Promise<CMSFacility[]> {
   const url = `${CMS_API_URL}?limit=${PAGE_SIZE}&offset=${offset}&sort_order=ASC&sort_by=cms_certification_number_ccn`;
   const res = await fetch(url);
@@ -115,24 +153,15 @@ async function main() {
 
   // Build INSERT statements in batches of 100
   const BATCH = 100;
-  const sqls: string[] = [];
-  for (let i = 0; i < mapped.length; i += BATCH) {
-    const batch = mapped.slice(i, i + BATCH);
-    const values = batch
-      .map(
-        (f) =>
-          `('${esc(f.cms_id)}','${esc(f.name)}','${esc(f.address)}','${esc(f.city)}','${esc(f.state)}','${esc(f.zip)}',${f.latitude ?? "NULL"},${f.longitude ?? "NULL"},${f.overall_rating ?? "NULL"},${f.quality_rating ?? "NULL"},${f.staffing_rating ?? "NULL"},${f.inspection_rating ?? "NULL"},${f.rn_hours_per_resident_day ?? "NULL"},${f.total_deficiencies ?? "NULL"},${f.grade_score},'${esc(f.grade_letter)}','${esc(f.grade_summary)}','${esc(f.slug)}','${esc(f.updated_at)}')`,
-      )
-      .join(",\n");
-    sqls.push(
-      `INSERT OR REPLACE INTO facilities (cms_id,name,address,city,state,zip,latitude,longitude,overall_rating,quality_rating,staffing_rating,inspection_rating,rn_hours_per_resident_day,total_deficiencies,grade_score,grade_letter,grade_summary,slug,updated_at) VALUES\n${values};`,
-    );
-  }
+  const facilitySqls = buildFacilitiesInsertBatches(mapped, BATCH);
+  const facilityRawSqls = buildFacilityRawInsertBatches(allFacilities, BATCH);
 
   // Write SQL file
   const { writeFileSync } = await import("fs");
-  writeFileSync("scripts/seed.sql", sqls.join("\n\n"));
-  console.log(`Wrote scripts/seed.sql (${mapped.length} rows in ${sqls.length} batches)`);
+  writeFileSync("scripts/seed.sql", [...facilitySqls, ...facilityRawSqls].join("\n\n"));
+  console.log(
+    `Wrote scripts/seed.sql (${mapped.length} facilities rows in ${facilitySqls.length} batches; ${allFacilities.length} facility_raw rows in ${facilityRawSqls.length} batches)`,
+  );
   console.log("Run: npx wrangler d1 execute nursinghomegrade --local --file=scripts/seed.sql");
   console.log("Then for remote: npx wrangler d1 execute nursinghomegrade --file=scripts/seed.sql");
 }

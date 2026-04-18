@@ -16,6 +16,7 @@ export interface CMSFacility {
   reported_total_nurse_staffing_hours_per_resident_per_day: string;
   rating_cycle_1_total_number_of_health_deficiencies: string;
   total_weighted_health_survey_score: string;
+  processing_date?: string;
 }
 
 // Stored in D1

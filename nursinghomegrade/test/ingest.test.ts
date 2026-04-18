@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { mapCMSFacility, buildFacilitySlugId } from "../scripts/ingest";
+import {
+  mapCMSFacility,
+  buildFacilitySlugId,
+  buildFacilityRawInsertBatches,
+  buildFacilitiesInsertBatches,
+} from "../scripts/ingest";
 import type { CMSFacility } from "../src/types";
 
 const SAMPLE_CMS: CMSFacility = {
@@ -73,5 +78,35 @@ describe("mapCMSFacility", () => {
 describe("buildFacilitySlugId", () => {
   it("concatenates cms_id and slug with a hyphen", () => {
     expect(buildFacilitySlugId("015001", "sunrise-care-center")).toBe("015001-sunrise-care-center");
+  });
+});
+
+describe("SQL batch generation", () => {
+  it("keeps facilities insert shape stable", () => {
+    const mapped = mapCMSFacility(SAMPLE_CMS);
+    const sqlBatches = buildFacilitiesInsertBatches([mapped], 100);
+    expect(sqlBatches).toHaveLength(1);
+    expect(sqlBatches[0]).toContain("INSERT OR REPLACE INTO facilities");
+    expect(sqlBatches[0]).toContain("'015001'");
+  });
+
+  it("stores JSON-stringified raw rows that round-trip via JSON.parse", () => {
+    const raw: CMSFacility = {
+      ...SAMPLE_CMS,
+      processing_date: "2026-04-17",
+      provider_name: "O'Malley Home",
+    };
+    const sqlBatches = buildFacilityRawInsertBatches([raw], 100);
+    expect(sqlBatches).toHaveLength(1);
+    expect(sqlBatches[0]).toContain("INSERT OR REPLACE INTO facility_raw");
+
+    expect(sqlBatches[0]).toContain("source_processing_date");
+    expect(sqlBatches[0]).toContain("ingested_at");
+
+    const rawJsonMatch = sqlBatches[0].match(/,\s*'(\{.*\})',\s*'2026-04-17'/s);
+    expect(rawJsonMatch?.[1]).toBeTruthy();
+    const unescapedJson = rawJsonMatch![1].replace(/''/g, "'");
+    const parsed = JSON.parse(unescapedJson) as CMSFacility;
+    expect(parsed).toEqual(raw);
   });
 });
