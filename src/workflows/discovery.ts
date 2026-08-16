@@ -20,7 +20,7 @@ type LeadCandidate = {
   entityCountEstimate: number | null;
   reserved: boolean;
   notes: string;
-  raw: unknown;
+  rawJson: string;
 };
 
 type ScoredLead = LeadCandidate & { scannerScore: number };
@@ -96,9 +96,6 @@ async function sha256(value: string) {
 }
 
 async function leadId(lead: LeadCandidate) {
-  // A lead is an observed source event, not the underlying dataset identity. A materially
-  // newer source observation therefore becomes a new Inbox item while exact workflow
-  // retries remain idempotent.
   const fingerprint = [lead.sourceId, lead.dataUrl || lead.title, lead.observedAt || "unknown"].join("|");
   return `lead_${(await sha256(fingerprint)).slice(0, 40)}`;
 }
@@ -137,7 +134,7 @@ async function scanFederalRegister(since: string): Promise<ScanResult> {
       title: `[${asText(doc.type) || "NOTICE"}] ${title}`,
       description: description.slice(0, 500), dataUrl: asText(doc.html_url), organization: agencies || "Unknown",
       formats: ["regulation"], observedAt: asText(doc.publication_date), entityCountEstimate: null,
-      reserved: false, notes: `Signal terms: ${matching.join(", ")}`, raw: doc,
+      reserved: false, notes: `Signal terms: ${matching.join(", ")}`, rawJson: JSON.stringify(doc),
     });
   }
   return { sourceId, sourceName: "Federal Register", sourceKind: "regulatory_signal", sourceUrl, leads };
@@ -164,7 +161,7 @@ async function scanStatePortal(state: string, domain: string): Promise<ScanResul
       sourceId, sourceName: `${state} Open Data`, sourceKind: "open_data_portal", sourceUrl,
       title: `[${state}] ${title}`, description, dataUrl, organization: `${state} State Government`,
       formats: ["Socrata", "CSV", "JSON"], observedAt: updated || isoDate(new Date()),
-      entityCountEstimate: null, reserved: false, notes: columns ? `Columns: ${columns}` : "", raw: item,
+      entityCountEstimate: null, reserved: false, notes: columns ? `Columns: ${columns}` : "", rawJson: JSON.stringify(item),
     });
   }
   return { sourceId, sourceName: `${state} Open Data`, sourceKind: "open_data_portal", sourceUrl, leads };
@@ -190,7 +187,7 @@ async function persistLeads(env: Env, leads: ScoredLead[]) {
         VALUES (?,?,?,?,?,?,?,?,?,?,?,'NEW',?)`)
         .bind(id, lead.sourceId, lead.title, lead.description, lead.dataUrl || null, lead.organization,
           JSON.stringify(lead.formats), lead.observedAt || null, lead.entityCountEstimate, lead.scannerScore,
-          lead.reserved ? 1 : 0, JSON.stringify({ notes: lead.notes, source: lead.raw })));
+          lead.reserved ? 1 : 0, JSON.stringify({ notes: lead.notes, source: lead.rawJson })));
     }
     const results = await env.DB.batch(statements);
     inserted += results.reduce((total, result) => total + Number(result.meta?.changes ?? 0), 0);
@@ -219,9 +216,10 @@ export class DiscoveryWorkflow extends WorkflowEntrypoint<Env, DiscoveryParams> 
       const errors: Array<{ source: string; error: string }> = [];
 
       try {
-        scans.push(await step.do("scan federal register", {
+        const scan = await step.do("scan federal register", {
           retries: { limit: 3, delay: "10 seconds", backoff: "exponential" }, timeout: "2 minutes",
-        }, () => scanFederalRegister(since)));
+        }, () => scanFederalRegister(since));
+        if (scan) scans.push(scan as ScanResult);
       } catch (error) {
         errors.push({ source: "Federal Register", error: error instanceof Error ? error.message : String(error) });
       }
@@ -233,22 +231,24 @@ export class DiscoveryWorkflow extends WorkflowEntrypoint<Env, DiscoveryParams> 
           const scan = await step.do(`scan state portal ${state}`, {
             retries: { limit: 2, delay: "10 seconds", backoff: "exponential" }, timeout: "2 minutes",
           }, () => scanStatePortal(state, domain));
-          scans.push(scan);
+          if (scan) scans.push(scan as ScanResult);
         } catch (error) {
           errors.push({ source: state, error: error instanceof Error ? error.message : String(error) });
         }
       }
 
-      const scored = await step.do("score candidate leads", async () => {
+      const scoredValue = await step.do("score candidate leads", async () => {
         const now = new Date(event.timestamp);
         return scans.flatMap(scan => scan.leads).map(lead => scoreLead(lead, now));
       });
+      const scored = (scoredValue ?? []) as ScoredLead[];
 
       await step.do("record source scans", async () => {
         for (const scan of scans) await persistSource(this.env, scan);
       });
 
-      const inserted = await step.do("persist leads to D1", async () => persistLeads(this.env, scored));
+      const insertedValue = await step.do("persist leads to D1", async () => persistLeads(this.env, scored));
+      const inserted = Number(insertedValue ?? 0);
       const summary = {
         triggeredBy, since, lookbackDays, sourcesAttempted: 1 + PORTALS_PER_RUN,
         sourcesSucceeded: scans.length, candidateEvents: scored.length, newLeads: inserted, errors,
