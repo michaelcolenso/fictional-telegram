@@ -1,0 +1,29 @@
+{
+  "version": "v3",
+  "scale": { "min": 0, "max": 10 },
+  "dimensions": [
+    { "key": "data_quality", "weight": 1 },
+    { "key": "search_demand", "weight": 1 },
+    { "key": "competition_gap", "weight": 1 },
+    { "key": "monetization_clarity", "weight": 1 },
+    { "key": "build_feasibility", "weight": 1 },
+    { "key": "defensibility", "weight": 1 }
+  ],
+  "hard_gates": {
+    "data_accessible": true,
+    "minimum_search_evidence_count": 2,
+    "reserved_source_blocks_promotion": true
+  },
+  "recommendations": {
+    "BUILD_RECOMMENDED": { "minimum_composite": 7.0, "requires_all_hard_gates": true },
+    "BACKLOG": { "minimum_composite": 5.0, "requires_all_hard_gates": true },
+    "KILL_RECOMMENDED": { "maximum_composite_exclusive": 5.0 }
+  },
+  "decision_policy": {
+    "recommendation_changes_lifecycle": false,
+    "portfolio_creation_requires_explicit_decision": true,
+    "all_lifecycle_mutations_append_decision_event": true,
+    "score_snapshots_are_immutable": true,
+    "evidence_is_history_preserving": true
+  }
+}
