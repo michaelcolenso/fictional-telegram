@@ -11,6 +11,7 @@
     "db:migrate:remote": "wrangler d1 migrations apply paydirt --remote",
     "db:import:legacy": "python scripts/import_legacy.py > .paydirt-legacy-import.sql",
     "db:seed:local": "npm run db:import:legacy && wrangler d1 execute paydirt --local --file=.paydirt-legacy-import.sql",
+    "validate": "python -m py_compile scripts/import_legacy.py && npm run db:migrate:local && npm run db:seed:local && npm run typecheck",
     "deploy": "npm run typecheck && wrangler deploy"
   },
   "devDependencies": {
