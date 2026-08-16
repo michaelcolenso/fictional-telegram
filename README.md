@@ -10,7 +10,7 @@ A `BUILD_RECOMMENDED` score does not automatically become a product.
 
 ## Control plane
 
-The current branch architecture is documented in [`ARCHITECTURE.md`](./ARCHITECTURE.md).
+The current architecture is documented in [`ARCHITECTURE.md`](./ARCHITECTURE.md).
 
 The UI provides five operating surfaces:
 
@@ -45,23 +45,12 @@ npm run deploy
 
 ## Canonical state
 
-D1 stores:
-
-- sources
-- leads
-- opportunities
-- evidence
-- immutable score snapshots
-- append-only decisions
-- products
-- runs
-
-Legacy JSON remains import/export material, not the production transactional model.
+D1 stores sources, leads, opportunities, evidence, immutable score snapshots, append-only decisions, products, and runs. Legacy JSON is import/export material rather than the production transactional model.
 
 ## Framework v3 policy
 
 See [`config/scoring-policy.json`](./config/scoring-policy.json). The first v3 policy keeps the familiar six scoring dimensions while separating recommendation from lifecycle state.
 
-## Legacy framework reference
+## Historical framework
 
-The historical Opportunity Discovery Framework v2 content that previously lived in this README is preserved in Git history and existing runner artifacts. The new architecture intentionally moves operating documentation into `ARCHITECTURE.md` so the README reflects the system that should actually be run going forward.
+The original 679-line **Opportunity Discovery Framework v2** README is preserved in git history at main commit `a44b18dd4cd1ba93934126720a56ba27a9618c67`. [`docs/LEGACY_FRAMEWORK.md`](./docs/LEGACY_FRAMEWORK.md) records that reference.
