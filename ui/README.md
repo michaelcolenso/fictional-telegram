@@ -22,10 +22,11 @@ When the Worker/D1 control plane is unavailable, it falls back to the repository
 
 ```bash
 npm install
-npm run db:migrate:local
-npm run db:seed:local
+npm run validate
 npm run dev
 ```
+
+`npm run validate` compiles the importer, applies the D1 migration locally, imports the legacy state, generates Wrangler binding types, and runs TypeScript checking.
 
 Wrangler serves `ui/` as static assets and routes `/api/*` through `src/index.ts`.
 
