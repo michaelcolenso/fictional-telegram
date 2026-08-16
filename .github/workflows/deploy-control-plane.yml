@@ -31,6 +31,8 @@ jobs:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       PAYDIRT_ADMIN_TOKEN: ${{ secrets.PAYDIRT_ADMIN_TOKEN }}
+      GOVINFO_API_KEY: ${{ secrets.GOVINFO_API_KEY }}
+      GRANTS_API_KEY: ${{ secrets.GRANTS_API_KEY }}
 
     steps:
       - uses: actions/checkout@v4
@@ -111,6 +113,20 @@ jobs:
 
       - name: Install admin secret
         run: printf '%s' "$PAYDIRT_ADMIN_TOKEN" | npx wrangler secret put PAYDIRT_ADMIN_TOKEN --config .wrangler.bootstrap.jsonc
+
+      - name: Install optional discovery secrets
+        shell: bash
+        run: |
+          if [ -n "$GOVINFO_API_KEY" ]; then
+            printf '%s' "$GOVINFO_API_KEY" | npx wrangler secret put GOVINFO_API_KEY --config .wrangler.bootstrap.jsonc
+          else
+            echo 'GOVINFO_API_KEY not configured; govinfo discovery will report skipped.'
+          fi
+          if [ -n "$GRANTS_API_KEY" ]; then
+            printf '%s' "$GRANTS_API_KEY" | npx wrangler secret put GRANTS_API_KEY --config .wrangler.bootstrap.jsonc
+          else
+            echo 'GRANTS_API_KEY not configured; Simpler.Grants.gov discovery will report skipped.'
+          fi
 
       - name: Deploy production Worker
         run: npx wrangler deploy --config .wrangler.production.jsonc
