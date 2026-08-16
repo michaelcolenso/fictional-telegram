@@ -139,9 +139,10 @@ CREATE INDEX IF NOT EXISTS idx_runs_created ON runs(created_at DESC);
 CREATE VIEW IF NOT EXISTS opportunity_current_scores AS
 SELECT s.*
 FROM score_snapshots s
-JOIN (
-  SELECT opportunity_id, MAX(created_at) AS created_at
-  FROM score_snapshots
-  GROUP BY opportunity_id
-) latest
-ON latest.opportunity_id = s.opportunity_id AND latest.created_at = s.created_at;
+WHERE s.rowid = (
+  SELECT s2.rowid
+  FROM score_snapshots s2
+  WHERE s2.opportunity_id = s.opportunity_id
+  ORDER BY s2.created_at DESC, s2.rowid DESC
+  LIMIT 1
+);
