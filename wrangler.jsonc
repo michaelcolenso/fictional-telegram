@@ -18,6 +18,8 @@
     {
       "binding": "DB",
       "database_name": "paydirt",
+      // Local dev uses this placeholder. Replace it with the UUID returned by
+      // `npx wrangler d1 create paydirt` before the first remote migration/deploy.
       "database_id": "00000000-0000-0000-0000-000000000000",
       "migrations_dir": "migrations"
     }
