@@ -30,6 +30,8 @@ async function testReads() {
   }
 }
 
+const nav = (page, route) => page.locator(`button.nav-item[data-route="${route}"]`);
+
 async function withBrowser(browserType, label, viewport) {
   const browser = await browserType.launch();
   const context = await browser.newContext({ viewport });
@@ -40,16 +42,18 @@ async function withBrowser(browserType, label, viewport) {
   page.on('dialog', async d => { console.log(`[${label} dialog] ${d.type()}: ${d.message()}`); await d.accept('UI smoke test'); });
   try {
     await page.goto(base, { waitUntil:'networkidle', timeout:30000 });
-    await page.locator('#system-status').waitFor({ timeout:10000 });
-    ok(`${label}: initial load`);
+    await page.locator('#system-status').waitFor({ state:'attached', timeout:10000 });
+    const statusClass = await page.locator('#system-status').getAttribute('class');
+    if (!statusClass?.includes('live')) throw new Error(`Expected live D1 control plane, got ${statusClass}`);
+    ok(`${label}: initial load/D1 mode`);
 
     for (const route of ['command','inbox','pipeline','portfolio']) {
-      await page.locator(`[data-route="${route}"]`).click();
+      await nav(page, route).click();
       await page.locator(`[data-view="${route}"]`).waitFor({ state:'visible' });
       ok(`${label}: navigate ${route}`);
     }
 
-    await page.locator('[data-route="inbox"]').click();
+    await nav(page, 'inbox').click();
     const search = page.locator('#lead-search');
     await search.fill(prefix);
     const cards = page.locator('#lead-list .lead-card');
@@ -57,7 +61,7 @@ async function withBrowser(browserType, label, viewport) {
     ok(`${label}: inbox search/filter`);
     await search.fill('');
 
-    await page.locator('[data-route="pipeline"]').click();
+    await nav(page, 'pipeline').click();
     const oppSearch = page.locator('#opp-search');
     await oppSearch.fill(prefix);
     if (await page.locator('#opportunity-list [data-open]').count() < 3) throw new Error('Seeded opportunities not visible');
@@ -77,7 +81,7 @@ async function withBrowser(browserType, label, viewport) {
     }
 
     // Research → backlog → reject
-    await page.locator('[data-route="pipeline"]').click();
+    await nav(page, 'pipeline').click();
     await page.getByText(names.research, { exact:true }).first().click();
     for (const [action, expected] of [['RESEARCH','RESEARCHING'],['BACKLOG','BACKLOG'],['REJECT','REJECTED']]) {
       const responsePromise = page.waitForResponse(r => r.url().includes('/decision') && r.request().method()==='POST');
@@ -89,7 +93,7 @@ async function withBrowser(browserType, label, viewport) {
     }
 
     // Rescore and build spec on dedicated seeded opportunity.
-    await page.locator('[data-route="pipeline"]').click();
+    await nav(page, 'pipeline').click();
     await page.getByText(names.spec, { exact:true }).first().click();
     let responsePromise = page.waitForResponse(r => r.url().includes('/rescore') && r.request().method()==='POST');
     await page.locator('[data-special-action="rescore"]').click();
@@ -117,7 +121,7 @@ async function withBrowser(browserType, label, viewport) {
     ok(`${label}: revalidate queue`);
 
     // Lead dismiss.
-    await page.locator('[data-route="inbox"]').click();
+    await nav(page, 'inbox').click();
     let card = page.locator('.lead-card').filter({ hasText:names.dismiss });
     responsePromise = page.waitForResponse(r => r.url().includes('/dismiss') && r.request().method()==='POST');
     await card.locator('[data-lead-action="dismiss"]').click();
@@ -136,7 +140,7 @@ async function withBrowser(browserType, label, viewport) {
     ok(`${label}: promote lead + validation queue`, promoted.validation_run_id || promoted.validation_error || 'promotion ok');
 
     // Discovery button. This intentionally creates one real discovery run.
-    await page.locator('[data-route="command"]').click();
+    await nav(page, 'command').click();
     const runButton = page.locator('#run-discovery');
     await runButton.waitFor({ state:'visible', timeout:5000 });
     responsePromise = page.waitForResponse(r => r.url().includes('/api/workflows/discovery') && r.request().method()==='POST');
@@ -146,7 +150,7 @@ async function withBrowser(browserType, label, viewport) {
     ok(`${label}: discovery queue`);
 
     // Portfolio should show the product created by APPROVE.
-    await page.locator('[data-route="portfolio"]').click();
+    await nav(page, 'portfolio').click();
     if (await page.getByText(names.flow, { exact:true }).count() < 1) throw new Error('Approved product not visible in portfolio');
     ok(`${label}: portfolio reflects approval`);
   } finally {
@@ -155,7 +159,6 @@ async function withBrowser(browserType, label, viewport) {
 }
 
 await testReads();
-// Full mutation pass once in WebKit/mobile, then a read/navigation pass in Chromium desktop.
 try { await withBrowser(webkit, 'WebKit mobile', {width:390,height:844}); } catch (e) { fail('WebKit mobile full UI pass', e); }
 
 try {
@@ -163,7 +166,7 @@ try {
   const page = await browser.newPage({ viewport:{width:1440,height:1000} });
   await page.goto(base, {waitUntil:'networkidle',timeout:30000});
   for (const route of ['command','inbox','pipeline','portfolio']) {
-    await page.locator(`[data-route="${route}"]`).click();
+    await nav(page, route).click();
     await page.locator(`[data-view="${route}"]`).waitFor({state:'visible'});
   }
   ok('Chromium desktop navigation/render');
