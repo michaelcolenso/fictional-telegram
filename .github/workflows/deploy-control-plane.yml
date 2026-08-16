@@ -1,3 +1,4 @@
+# Production deploy: keep this workflow path-triggered on main.
 name: Deploy Control Plane
 
 on:
