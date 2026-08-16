@@ -1,0 +1,50 @@
+name: Control Plane CI
+
+on:
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'ui/**'
+      - 'migrations/**'
+      - 'scripts/import_legacy.py'
+      - 'config/scoring-policy.json'
+      - 'package.json'
+      - 'wrangler.jsonc'
+      - 'tsconfig.json'
+      - '.github/workflows/control-plane-ci.yml'
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm install --package-lock=false
+
+      - name: Validate legacy importer
+        run: |
+          python -m py_compile scripts/import_legacy.py
+          python scripts/import_legacy.py > .paydirt-legacy-import.sql
+          test -s .paydirt-legacy-import.sql
+
+      - name: Apply D1 schema locally
+        run: npm run db:migrate:local
+
+      - name: Seed legacy state locally
+        run: npx wrangler d1 execute paydirt --local --file=.paydirt-legacy-import.sql
+
+      - name: Typecheck Worker
+        run: npm run typecheck
