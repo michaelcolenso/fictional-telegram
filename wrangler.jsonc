@@ -23,14 +23,17 @@
       "binding": "DISCOVERY_WORKFLOW",
       "class_name": "DiscoveryWorkflow",
       "schedules": ["0 14 * * 1"]
+    },
+    {
+      "name": "paydirt-validation",
+      "binding": "VALIDATION_WORKFLOW",
+      "class_name": "ValidationWorkflow"
     }
   ],
   "d1_databases": [
     {
       "binding": "DB",
       "database_name": "paydirt",
-      // Local dev uses this placeholder. Production provisioning patches this
-      // in the deployment workspace with the real D1 UUID before deploy.
       "database_id": "00000000-0000-0000-0000-000000000000",
       "migrations_dir": "migrations"
     }
