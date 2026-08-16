@@ -99,7 +99,10 @@ jobs:
 
       - name: Import legacy state idempotently
         run: |
-          python scripts/import_legacy.py > .paydirt-legacy-import.sql
+          # Remote D1 upload execution manages atomicity itself and rejects explicit
+          # BEGIN/COMMIT statements. Keep those in the local importer path, but strip
+          # only the transaction wrapper for this remote seed.
+          python scripts/import_legacy.py | sed '/^BEGIN TRANSACTION;$/d;/^COMMIT;$/d' > .paydirt-legacy-import.sql
           npx wrangler d1 execute paydirt --remote --config .wrangler.production.jsonc --file=.paydirt-legacy-import.sql
 
       - name: Bootstrap Worker before secret exists
