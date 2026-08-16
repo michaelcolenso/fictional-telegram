@@ -2,5 +2,9 @@
 node_modules/
 .wrangler/
 .dev.vars
+.env
+.env.*
 worker-configuration.d.ts
 .paydirt-legacy-import.sql
+.wrangler.production.jsonc
+.wrangler.bootstrap.jsonc
