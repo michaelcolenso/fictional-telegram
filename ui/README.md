@@ -41,6 +41,19 @@ npx wrangler d1 execute paydirt --remote --file=.paydirt-legacy-import.sql
 npm run deploy
 ```
 
+## Implemented in this branch
+
+- v3 canonical D1 schema
+- immutable score snapshots and evidence records
+- append-only decision-history table
+- separate Lead → Opportunity → Product records
+- deterministic legacy JSON → SQL importer
+- read API for dashboard, leads, opportunities, opportunity detail, portfolio, runs, and health
+- static Worker asset routing
+- UI API-first loading with legacy fallback
+- explicit v3 scoring/decision policy
+- CI definition for importer, D1 local migration/seed, and Worker typechecking
+
 ## Phase boundary
 
-This branch implements the canonical read model. The decision buttons are visible but intentionally disabled. Phase C adds authenticated mutation endpoints for promote, research, backlog, reject, rescore, and build-spec generation, with every lifecycle change appended to `decisions`.
+The decision buttons are visible but intentionally disabled. Phase C adds authenticated mutation endpoints for promote, research, backlog, reject, rescore, and build-spec generation, with every lifecycle change appended to `decisions`.
