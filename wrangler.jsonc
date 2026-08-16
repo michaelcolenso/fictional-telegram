@@ -8,6 +8,9 @@
     "enabled": true,
     "head_sampling_rate": 1
   },
+  "secrets": {
+    "required": ["PAYDIRT_ADMIN_TOKEN"]
+  },
   "assets": {
     "directory": "./ui",
     "binding": "ASSETS",
@@ -18,8 +21,8 @@
     {
       "binding": "DB",
       "database_name": "paydirt",
-      // Local dev uses this placeholder. Replace it with the UUID returned by
-      // `npx wrangler d1 create paydirt` before the first remote migration/deploy.
+      // Local dev uses this placeholder. Production provisioning patches this
+      // in the deployment workspace with the real D1 UUID before deploy.
       "database_id": "00000000-0000-0000-0000-000000000000",
       "migrations_dir": "migrations"
     }
