@@ -1,0 +1,22 @@
+{
+  "name": "paydirt-control-plane",
+  "private": true,
+  "version": "0.2.0",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "cf-typegen": "wrangler types",
+    "typecheck": "npm run cf-typegen && tsc --noEmit",
+    "ui:check": "node --check ui/app.js",
+    "db:migrate:local": "wrangler d1 migrations apply paydirt --local",
+    "db:migrate:remote": "wrangler d1 migrations apply paydirt --remote",
+    "db:import:legacy": "python scripts/import_legacy.py > .paydirt-legacy-import.sql",
+    "db:seed:local": "npm run db:import:legacy && wrangler d1 execute paydirt --local --file=.paydirt-legacy-import.sql",
+    "validate": "python -m py_compile scripts/import_legacy.py && npm run ui:check && npm run db:migrate:local && npm run db:seed:local && npm run typecheck",
+    "deploy": "npm run validate && wrangler deploy"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2",
+    "wrangler": "^4.115.0"
+  }
+}

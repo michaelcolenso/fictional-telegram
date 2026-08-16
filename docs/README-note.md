@@ -1,0 +1,1 @@
+The original 679-line Opportunity Discovery Framework v2 README is preserved in git history at `main` commit `a44b18dd4cd1ba93934126720a56ba27a9618c67` and remains the historical framework reference. The branch README is now operator-facing; `ARCHITECTURE.md` is the canonical system design.
