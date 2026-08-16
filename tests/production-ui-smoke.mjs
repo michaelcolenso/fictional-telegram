@@ -31,10 +31,11 @@ async function testReads() {
 }
 
 const nav = (page, route) => page.locator(`button.nav-item[data-route="${route}"]`);
+const pipelineRow = (page, name) => page.locator('#opportunity-list [data-open]').filter({ hasText: name });
 
 async function withBrowser(browserType, label, viewport) {
   const browser = await browserType.launch();
-  const context = await browser.newContext({ viewport });
+  const context = await browser.newContext({ viewport, acceptDownloads:true });
   await context.addInitScript(t => sessionStorage.setItem('paydirt-admin-token', t), token);
   const page = await context.newPage();
   page.on('console', msg => console.log(`[${label} console] ${msg.type()}: ${msg.text()}`));
@@ -47,7 +48,7 @@ async function withBrowser(browserType, label, viewport) {
     if (!statusClass?.includes('live')) throw new Error(`Expected live D1 control plane, got ${statusClass}`);
     ok(`${label}: initial load/D1 mode`);
 
-    for (const route of ['command','inbox','pipeline','portfolio']) {
+    for (const route of ['command','inbox','pipeline','workspace','portfolio']) {
       await nav(page, route).click();
       await page.locator(`[data-view="${route}"]`).waitFor({ state:'visible' });
       ok(`${label}: navigate ${route}`);
@@ -68,8 +69,14 @@ async function withBrowser(browserType, label, viewport) {
     ok(`${label}: pipeline search`);
     await oppSearch.fill('');
 
+    // Pipeline recommendation filters.
+    await page.locator('#pipeline-filters [data-filter="BUILD_RECOMMENDED"]').click();
+    if (await pipelineRow(page, names.flow).count() !== 1 || await pipelineRow(page, names.research).count() !== 0) throw new Error('BUILD_RECOMMENDED filter mismatch');
+    ok(`${label}: pipeline recommendation filter`);
+    await page.locator('#pipeline-filters [data-filter="ALL"]').click();
+
     // Lifecycle: APPROVE → READY_TO_BUILD → START_BUILD → LAUNCH
-    await page.getByText(names.flow, { exact:true }).first().click();
+    await pipelineRow(page, names.flow).click();
     await page.locator('#workspace-content').waitFor({ state:'visible' });
     for (const [action, expected] of [['APPROVE','APPROVED'],['READY_TO_BUILD','READY_TO_BUILD'],['START_BUILD','BUILDING'],['LAUNCH','LAUNCHED']]) {
       const responsePromise = page.waitForResponse(r => r.url().includes('/decision') && r.request().method()==='POST');
@@ -82,7 +89,7 @@ async function withBrowser(browserType, label, viewport) {
 
     // Research → backlog → reject
     await nav(page, 'pipeline').click();
-    await page.getByText(names.research, { exact:true }).first().click();
+    await pipelineRow(page, names.research).click();
     for (const [action, expected] of [['RESEARCH','RESEARCHING'],['BACKLOG','BACKLOG'],['REJECT','REJECTED']]) {
       const responsePromise = page.waitForResponse(r => r.url().includes('/decision') && r.request().method()==='POST');
       await page.locator(`[data-opp-action="${action}"]`).click();
@@ -94,7 +101,7 @@ async function withBrowser(browserType, label, viewport) {
 
     // Rescore and build spec on dedicated seeded opportunity.
     await nav(page, 'pipeline').click();
-    await page.getByText(names.spec, { exact:true }).first().click();
+    await pipelineRow(page, names.spec).click();
     let responsePromise = page.waitForResponse(r => r.url().includes('/rescore') && r.request().method()==='POST');
     await page.locator('[data-special-action="rescore"]').click();
     let resp = await responsePromise;
@@ -102,7 +109,7 @@ async function withBrowser(browserType, label, viewport) {
     ok(`${label}: rescore mutation`);
 
     responsePromise = page.waitForResponse(r => r.url().includes('/build-spec') && r.request().method()==='POST');
-    const downloadPromise = page.waitForEvent('download').catch(()=>null);
+    const downloadPromise = page.waitForEvent('download', {timeout:10000}).catch(()=>null);
     await page.locator('[data-special-action="build-spec"]').click();
     resp = await responsePromise;
     if (!resp.ok()) throw new Error(`build-spec returned ${resp.status()}`);
@@ -151,7 +158,7 @@ async function withBrowser(browserType, label, viewport) {
 
     // Portfolio should show the product created by APPROVE.
     await nav(page, 'portfolio').click();
-    if (await page.getByText(names.flow, { exact:true }).count() < 1) throw new Error('Approved product not visible in portfolio');
+    if (await page.locator('#portfolio-grid').getByText(names.flow, { exact:true }).count() < 1) throw new Error('Approved product not visible in portfolio');
     ok(`${label}: portfolio reflects approval`);
   } finally {
     await browser.close();
@@ -165,7 +172,7 @@ try {
   const browser = await chromium.launch();
   const page = await browser.newPage({ viewport:{width:1440,height:1000} });
   await page.goto(base, {waitUntil:'networkidle',timeout:30000});
-  for (const route of ['command','inbox','pipeline','portfolio']) {
+  for (const route of ['command','inbox','pipeline','workspace','portfolio']) {
     await nav(page, route).click();
     await page.locator(`[data-view="${route}"]`).waitFor({state:'visible'});
   }
