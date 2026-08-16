@@ -1,44 +1,46 @@
-# Paydirt UI
+# Paydirt Control Plane UI
 
-A zero-dependency command center for the Opportunity Discovery Framework.
+The UI is the primary operating surface for Paydirt. It is intentionally zero-dependency HTML/CSS/JS and is served as Cloudflare Worker static assets.
 
-## What it shows
+## Product surfaces
 
-- Ranked opportunity pipeline
-- BUILD / BACKLOG / KILL verdicts
-- Composite and six-factor score profile
-- Data-source health and entity count
-- Demand and pain signals
-- Query pattern, competition evidence, monetization, and build notes
-- Existing portfolio state to prevent discovery overlap
+- **Command** — decision queue, fresh leads, and recent system runs
+- **Inbox** — raw machine-found dataset leads before they become opportunities
+- **Pipeline** — opportunity lifecycle, recommendation, score, and recency
+- **Workspace** — evidence, score snapshot, economics, build thesis, and future decision actions
+- **Portfolio** — explicitly approved products only
 
-The client normalizes both pipeline formats currently present in this repository:
+A recommendation is never treated as a decision. `BUILD_RECOMMENDED` remains an opportunity state signal until a later mutation API records an explicit promotion.
 
-1. `pipeline.json` with `opportunities[]` and phase-specific evidence
-2. Runner output with `candidates[]` from `run_full_workflow.py`
+## Data modes
 
-## Preview locally
+The client tries `GET /api/dashboard` first.
 
-Serve the repository root so the UI can read the adjacent JSON files:
+When the Worker/D1 control plane is unavailable, it falls back to the repository's legacy JSON artifacts. The sidebar clearly labels this mode **LEGACY PREVIEW** so filesystem data cannot be mistaken for production state.
+
+## Local control-plane setup
 
 ```bash
-python -m http.server 8788
+npm install
+npm run db:migrate:local
+npm run db:seed:local
+npm run dev
 ```
 
-Then open:
+Wrangler serves `ui/` as static assets and routes `/api/*` through `src/index.ts`.
 
-```text
-http://localhost:8788/ui/
+## Provision production D1
+
+Create the database, then replace the zero UUID in `wrangler.jsonc` with the returned database ID:
+
+```bash
+npx wrangler d1 create paydirt
+npm run db:migrate:remote
+python scripts/import_legacy.py > .paydirt-legacy-import.sql
+npx wrangler d1 execute paydirt --remote --file=.paydirt-legacy-import.sql
+npm run deploy
 ```
 
-Opening `ui/index.html` directly with `file://` will not work because browsers block local JSON fetches.
+## Phase boundary
 
-## Hosting
-
-The UI is intentionally static and can be deployed without a framework. For Cloudflare Pages, use the repository as the source and publish the repository root (or add a tiny build step that copies `pipeline.json`, `portfolio_state.json`, and `ui/` into a dedicated output directory).
-
-For a public deployment, the client also includes read-only fallbacks to the `main` branch JSON files on GitHub.
-
-## Next architecture step
-
-Keep this UI static until Paydirt needs mutations. When actions such as **Run discovery**, **Advance to build**, **Kill**, **Rescore**, or **Edit portfolio state** become real product requirements, add a small Cloudflare Worker API in front of the runner/state rather than introducing a frontend framework prematurely.
+This branch implements the canonical read model. The decision buttons are visible but intentionally disabled. Phase C adds authenticated mutation endpoints for promote, research, backlog, reject, rescore, and build-spec generation, with every lifecycle change appended to `decisions`.
