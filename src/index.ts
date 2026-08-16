@@ -89,7 +89,7 @@ const opportunitySelect = `
 `;
 
 async function dashboard(env: Env) {
-  const [leadCount, oppCount, buildCount, productCount, leads, opportunities, products, runs] = await Promise.all([
+  const [leadCount, oppCount, buildCount, productCount, leads, opportunities, products, runs, sources] = await Promise.all([
     env.DB.prepare("SELECT COUNT(*) AS n FROM leads WHERE status='NEW' AND reserved=0").first<{ n: number }>(),
     env.DB.prepare("SELECT COUNT(*) AS n FROM opportunities WHERE lifecycle_state NOT IN ('REJECTED','LAUNCHED')").first<{ n: number }>(),
     env.DB.prepare("SELECT COUNT(*) AS n FROM opportunities WHERE recommendation='BUILD_RECOMMENDED' AND lifecycle_state NOT IN ('APPROVED','READY_TO_BUILD','BUILDING','LAUNCHED','REJECTED')").first<{ n: number }>(),
@@ -97,24 +97,29 @@ async function dashboard(env: Env) {
     env.DB.prepare("SELECT l.*,s.name AS source_name FROM leads l LEFT JOIN sources s ON s.id=l.source_id WHERE l.status='NEW' ORDER BY l.reserved ASC,l.scanner_score DESC,l.created_at DESC LIMIT 20").all<LeadRow>(),
     env.DB.prepare(`${opportunitySelect} ORDER BY COALESCE(s.composite,0) DESC,o.updated_at DESC LIMIT 50`).all<OpportunityRow>(),
     env.DB.prepare("SELECT * FROM products ORDER BY updated_at DESC LIMIT 50").all(),
-    env.DB.prepare("SELECT id,run_type,status,started_at,finished_at,error,created_at FROM runs ORDER BY created_at DESC LIMIT 10").all(),
+    env.DB.prepare("SELECT id,run_type,status,workflow_instance_id,opportunity_id,trigger_source,started_at,finished_at,summary_json,error,created_at FROM runs ORDER BY created_at DESC LIMIT 20").all(),
+    env.DB.prepare("SELECT id,name,kind,url,health_status,last_scanned_at,last_error,last_result_json,updated_at FROM sources ORDER BY updated_at DESC LIMIT 30").all(),
   ]);
   return {
-    meta: { frameworkVersion: "v3", generatedAt: new Date().toISOString(), sourceOfTruth: "d1", mutations: true },
+    meta: { frameworkVersion: "v3", generatedAt: new Date().toISOString(), sourceOfTruth: "d1", mutations: true, workflows: true },
     counts: { leads: leadCount?.n ?? 0, opportunities: oppCount?.n ?? 0, buildRecommended: buildCount?.n ?? 0, products: productCount?.n ?? 0 },
     leads: leads.results.map(row => ({ ...row, formats: parseJson<string[]>(row.formats_json, []), reserved: Boolean(row.reserved) })),
-    opportunities: opportunities.results.map(mapOpportunity), products: products.results, runs: runs.results,
+    opportunities: opportunities.results.map(mapOpportunity),
+    products: products.results,
+    runs: runs.results.map(row => ({ ...row, summary: parseJson((row as {summary_json?: string | null}).summary_json ?? null, null) })),
+    sources: sources.results.map(row => ({ ...row, last_result: parseJson((row as {last_result_json?: string | null}).last_result_json ?? null, null) })),
   };
 }
 
 async function opportunityDetail(env: Env, id: string) {
   const row = await env.DB.prepare(`${opportunitySelect} WHERE o.id=? LIMIT 1`).bind(id).first<OpportunityRow>();
   if (!row) return null;
-  const [evidence, decisions, scores, specs] = await Promise.all([
+  const [evidence, decisions, scores, specs, runs] = await Promise.all([
     env.DB.prepare("SELECT id,kind,label,value_json,source_url,observed_at,run_id,created_at FROM evidence WHERE opportunity_id=? ORDER BY created_at DESC LIMIT 100").bind(id).all(),
     env.DB.prepare("SELECT id,action,from_state,to_state,actor,reason,created_at FROM decisions WHERE opportunity_id=? ORDER BY created_at DESC LIMIT 100").bind(id).all(),
     env.DB.prepare("SELECT * FROM score_snapshots WHERE opportunity_id=? ORDER BY created_at DESC LIMIT 25").bind(id).all(),
     env.DB.prepare("SELECT id,version,score_snapshot_id,created_by,created_at FROM build_specs WHERE opportunity_id=? ORDER BY version DESC LIMIT 25").bind(id).all(),
+    env.DB.prepare("SELECT id,run_type,status,workflow_instance_id,trigger_source,started_at,finished_at,summary_json,error,created_at FROM runs WHERE opportunity_id=? ORDER BY created_at DESC LIMIT 25").bind(id).all(),
   ]);
   return {
     ...mapOpportunity(row),
@@ -122,8 +127,42 @@ async function opportunityDetail(env: Env, id: string) {
       const e = item as { value_json?: string };
       return { ...item, value: parseJson(e.value_json ?? null, e.value_json ?? null) };
     }),
-    decisions: decisions.results, score_history: scores.results, build_specs: specs.results,
+    decisions: decisions.results,
+    score_history: scores.results,
+    build_specs: specs.results,
+    runs: runs.results.map(item => ({ ...item, summary: parseJson((item as {summary_json?: string | null}).summary_json ?? null, null) })),
   };
+}
+
+async function startValidation(env: Env, opportunityId: string, triggerSource: string) {
+  const opportunity = await env.DB.prepare("SELECT id,lifecycle_state FROM opportunities WHERE id=?").bind(opportunityId).first<{ id: string; lifecycle_state: string }>();
+  if (!opportunity) throw new Error("opportunity_not_found");
+  if (["APPROVED","READY_TO_BUILD","BUILDING","LAUNCHED","REJECTED"].includes(opportunity.lifecycle_state)) throw new Error(`validation_not_allowed_from_${opportunity.lifecycle_state}`);
+  const runId = `val_${crypto.randomUUID()}`;
+  await env.DB.prepare("INSERT INTO runs(id,run_type,status,workflow_instance_id,opportunity_id,trigger_source,summary_json) VALUES (?,'validation','queued',?,?,?,?)")
+    .bind(runId, runId, opportunityId, triggerSource, JSON.stringify({ opportunityId, triggerSource })).run();
+  try {
+    const instance = await env.VALIDATION_WORKFLOW.create({ id: runId, params: { opportunityId, triggerSource } });
+    return instance.id;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    await env.DB.prepare("UPDATE runs SET status='failed',finished_at=CURRENT_TIMESTAMP,error=? WHERE id=?").bind(message, runId).run();
+    throw error;
+  }
+}
+
+async function startDiscovery(env: Env, lookbackDays = 30, triggerSource = "manual") {
+  const runId = `disc_${crypto.randomUUID()}`;
+  await env.DB.prepare("INSERT INTO runs(id,run_type,status,workflow_instance_id,trigger_source,summary_json) VALUES (?,'discovery','queued',?,?,?)")
+    .bind(runId, runId, triggerSource, JSON.stringify({ triggerSource, lookbackDays })).run();
+  try {
+    const instance = await env.DISCOVERY_WORKFLOW.create({ id: runId, params: { lookbackDays, source: triggerSource } });
+    return instance.id;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    await env.DB.prepare("UPDATE runs SET status='failed',finished_at=CURRENT_TIMESTAMP,error=? WHERE id=?").bind(message, runId).run();
+    throw error;
+  }
 }
 
 async function promoteLead(env: Env, id: string, reason: string) {
@@ -144,7 +183,11 @@ async function promoteLead(env: Env, id: string, reason: string) {
     env.DB.prepare("INSERT INTO lead_decisions(id,lead_id,action,actor,reason) VALUES (?,?,'PROMOTE','owner',?)").bind(leadDecisionId, id, reason || null),
     env.DB.prepare("INSERT INTO decisions(id,opportunity_id,action,from_state,to_state,actor,reason) VALUES (?,?,'PROMOTE_LEAD',NULL,'DISCOVERED','owner',?)").bind(decisionId, opportunityId, reason || null),
   ]);
-  return jsonResponse({ ok: true, opportunity_id: opportunityId }, 201);
+  let validationRunId: string | null = null;
+  let validationError: string | null = null;
+  try { validationRunId = await startValidation(env, opportunityId, "lead_promotion"); }
+  catch (error) { validationError = error instanceof Error ? error.message : String(error); }
+  return jsonResponse({ ok: true, opportunity_id: opportunityId, validation_run_id: validationRunId, validation_error: validationError }, 201);
 }
 
 async function dismissLead(env: Env, id: string, reason: string) {
@@ -216,8 +259,8 @@ async function rescoreOpportunity(env: Env, id: string) {
   const runId = crypto.randomUUID();
   const scoreId = crypto.randomUUID();
   await env.DB.batch([
-    env.DB.prepare("INSERT INTO runs(id,run_type,status,started_at,finished_at,summary_json) VALUES (?,'manual_rescore','complete',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,?)")
-      .bind(runId, JSON.stringify({ mode: "policy_recompute", framework: "v3", source_snapshot: current.id })),
+    env.DB.prepare("INSERT INTO runs(id,run_type,status,started_at,finished_at,summary_json,opportunity_id,trigger_source) VALUES (?,'manual_rescore','complete',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,?,?, 'manual')")
+      .bind(runId, JSON.stringify({ mode: "policy_recompute", framework: "v3", source_snapshot: current.id }), id),
     env.DB.prepare(`INSERT INTO score_snapshots
       (id,opportunity_id,run_id,framework_version,data_quality,search_demand,competition_gap,monetization_clarity,build_feasibility,defensibility,composite,recommendation,rationale_json)
       VALUES (?,?,?,'v3',?,?,?,?,?,?,?,?,?)`)
@@ -235,54 +278,21 @@ async function generateBuildSpec(env: Env, id: string) {
   const version = versionRow?.version ?? 1;
   const evidence = ((detail as { evidence?: Array<Record<string, unknown>> }).evidence ?? []).slice(0, 12);
   const lines = [
-    `# Build Spec: ${detail.name}`,
-    "",
-    `Version: ${version}`,
-    `Lifecycle: ${detail.lifecycle_state}`,
-    `Recommendation: ${detail.recommendation}`,
-    latest ? `Composite score: ${latest.composite}/10` : "Composite score: unavailable",
-    "",
-    "## Opportunity thesis",
-    detail.build_notes || "No build thesis recorded.",
-    "",
-    "## Search intent",
-    detail.query_pattern || "No primary query recorded.",
-    "",
-    "## Data source",
-    `- Source: ${detail.data_source_name || "Unknown"}`,
-    `- URL: ${detail.data_source_url || "Not recorded"}`,
-    `- Format: ${detail.data_format || "Unknown"}`,
-    `- Update cadence: ${detail.update_frequency || "Unknown"}`,
-    `- Entity count: ${detail.entity_count ?? "Unknown"}`,
-    `- Licensing: ${detail.licensing || "Not recorded"}`,
-    "",
-    "## Monetization",
-    detail.monetization_model || "Not recorded.",
-    "",
-    "## Current score",
-    ...(latest ? [
-      `- Data quality: ${latest.data_quality}`,
-      `- Search demand: ${latest.search_demand}`,
-      `- Competition gap: ${latest.competition_gap}`,
-      `- Monetization clarity: ${latest.monetization_clarity}`,
-      `- Build feasibility: ${latest.build_feasibility}`,
-      `- Defensibility: ${latest.defensibility}`,
-    ] : ["No score snapshot recorded."]),
-    "",
-    "## Evidence snapshot",
-    ...evidence.map(e => `- **${String(e.kind ?? "evidence")}** ${String(e.label ?? "")}: ${JSON.stringify(e.value ?? null)}`),
-    "",
-    "## MVP guardrails",
-    "- Ship the smallest indexable/useful surface that validates demand.",
-    "- Keep source data provenance visible and reproducible.",
-    "- Treat monetization assumptions as hypotheses until measured.",
+    `# Build Spec: ${detail.name}`, "", `Version: ${version}`, `Lifecycle: ${detail.lifecycle_state}`, `Recommendation: ${detail.recommendation}`,
+    latest ? `Composite score: ${latest.composite}/10` : "Composite score: unavailable", "", "## Opportunity thesis", detail.build_notes || "No build thesis recorded.",
+    "", "## Search intent", detail.query_pattern || "No primary query recorded.", "", "## Data source", `- Source: ${detail.data_source_name || "Unknown"}`,
+    `- URL: ${detail.data_source_url || "Not recorded"}`, `- Format: ${detail.data_format || "Unknown"}`, `- Update cadence: ${detail.update_frequency || "Unknown"}`,
+    `- Entity count: ${detail.entity_count ?? "Unknown"}`, `- Licensing: ${detail.licensing || "Not recorded"}`, "", "## Monetization", detail.monetization_model || "Not recorded.",
+    "", "## Current score", ...(latest ? [`- Data quality: ${latest.data_quality}`, `- Search demand: ${latest.search_demand}`, `- Competition gap: ${latest.competition_gap}`,
+      `- Monetization clarity: ${latest.monetization_clarity}`, `- Build feasibility: ${latest.build_feasibility}`, `- Defensibility: ${latest.defensibility}`] : ["No score snapshot recorded."]),
+    "", "## Evidence snapshot", ...evidence.map(e => `- **${String(e.kind ?? "evidence")}** ${String(e.label ?? "")}: ${JSON.stringify(e.value ?? null)}`), "", "## MVP guardrails",
+    "- Ship the smallest indexable/useful surface that validates demand.", "- Keep source data provenance visible and reproducible.", "- Treat monetization assumptions as hypotheses until measured.",
     "- Do not expand scope until the initial query space shows traction.",
   ];
   const content = lines.join("\n");
   const specId = crypto.randomUUID();
   const scoreSnapshotId = latest && typeof latest === "object" ? String((latest as Record<string, unknown>).id ?? "") || null : null;
-  await env.DB.prepare("INSERT INTO build_specs(id,opportunity_id,version,score_snapshot_id,content,created_by) VALUES (?,?,?,?,?,'owner')")
-    .bind(specId,id,version,scoreSnapshotId,content).run();
+  await env.DB.prepare("INSERT INTO build_specs(id,opportunity_id,version,score_snapshot_id,content,created_by) VALUES (?,?,?,?,?,'owner')").bind(specId,id,version,scoreSnapshotId,content).run();
   return jsonResponse({ ok: true, id: specId, version, filename: `build-spec-${id}-v${version}.md`, content }, 201);
 }
 
@@ -295,19 +305,24 @@ async function handleMutation(request: Request, env: Env, url: URL) {
   const body = await readBody(request);
   const reason = typeof body.reason === "string" ? body.reason.trim() : "";
 
-  let match = url.pathname.match(/^\/api\/leads\/([^/]+)\/(promote|dismiss)$/);
-  if (match) return match[2] === "promote"
-    ? promoteLead(env, decodeURIComponent(match[1]), reason)
-    : dismissLead(env, decodeURIComponent(match[1]), reason);
+  if (url.pathname === "/api/workflows/discovery") {
+    const lookbackDays = Math.max(1, Math.min(90, Number(body.lookback_days ?? 30)));
+    const id = await startDiscovery(env, lookbackDays, "manual");
+    return jsonResponse({ ok: true, workflow_instance_id: id }, 202);
+  }
 
-  match = url.pathname.match(/^\/api\/opportunities\/([^/]+)\/(decision|rescore|build-spec)$/);
+  let match = url.pathname.match(/^\/api\/leads\/([^/]+)\/(promote|dismiss)$/);
+  if (match) return match[2] === "promote" ? promoteLead(env, decodeURIComponent(match[1]), reason) : dismissLead(env, decodeURIComponent(match[1]), reason);
+
+  match = url.pathname.match(/^\/api\/opportunities\/([^/]+)\/(decision|rescore|build-spec|validate)$/);
   if (match) {
     const id = decodeURIComponent(match[1]);
-    if (match[2] === "decision") {
-      const action = String(body.action ?? "").toUpperCase() as DecisionAction;
-      return decideOpportunity(env, id, action, reason);
-    }
+    if (match[2] === "decision") return decideOpportunity(env, id, String(body.action ?? "").toUpperCase() as DecisionAction, reason);
     if (match[2] === "rescore") return rescoreOpportunity(env, id);
+    if (match[2] === "validate") {
+      try { return jsonResponse({ ok: true, workflow_instance_id: await startValidation(env, id, "manual") }, 202); }
+      catch (error) { return jsonResponse({ error: error instanceof Error ? error.message : String(error) }, 409); }
+    }
     return generateBuildSpec(env, id);
   }
   return jsonResponse({ error: "not_found" }, 404);
@@ -322,7 +337,7 @@ export default {
       if (request.method !== "GET") return jsonResponse({ error: "method_not_allowed" }, 405);
       if (url.pathname === "/api/health") {
         const result = await env.DB.prepare("SELECT 1 AS ok").first<{ ok: number }>();
-        return jsonResponse({ ok: result?.ok === 1, sourceOfTruth: "d1", mutations: true });
+        return jsonResponse({ ok: result?.ok === 1, sourceOfTruth: "d1", mutations: true, workflows: true });
       }
       if (url.pathname === "/api/dashboard") return jsonResponse(await dashboard(env));
       if (url.pathname === "/api/leads") {
@@ -333,6 +348,10 @@ export default {
       if (url.pathname === "/api/opportunities") {
         const rows = await env.DB.prepare(`${opportunitySelect} ORDER BY COALESCE(s.composite,0) DESC,o.updated_at DESC LIMIT 250`).all<OpportunityRow>();
         return jsonResponse({ opportunities: rows.results.map(mapOpportunity) });
+      }
+      if (url.pathname === "/api/sources") {
+        const rows = await env.DB.prepare("SELECT id,name,kind,url,enabled,scan_cadence,last_scanned_at,health_status,last_error,last_result_json,updated_at FROM sources ORDER BY updated_at DESC").all();
+        return jsonResponse({ sources: rows.results.map(row => ({ ...row, last_result: parseJson((row as {last_result_json?: string | null}).last_result_json ?? null, null) })) });
       }
       let match = url.pathname.match(/^\/api\/opportunities\/([^/]+)\/build-spec\/latest$/);
       if (match) {
@@ -349,8 +368,8 @@ export default {
         return jsonResponse({ products: rows.results });
       }
       if (url.pathname === "/api/runs") {
-        const rows = await env.DB.prepare("SELECT * FROM runs ORDER BY created_at DESC LIMIT 100").all();
-        return jsonResponse({ runs: rows.results });
+        const rows = await env.DB.prepare("SELECT id,run_type,status,workflow_instance_id,opportunity_id,trigger_source,started_at,finished_at,summary_json,error,created_at FROM runs ORDER BY created_at DESC LIMIT 100").all();
+        return jsonResponse({ runs: rows.results.map(row => ({ ...row, summary: parseJson((row as {summary_json?: string | null}).summary_json ?? null, null) })) });
       }
       return jsonResponse({ error: "not_found" }, 404);
     } catch (error) {
