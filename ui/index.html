@@ -10,13 +10,12 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="./styles.css" />
+  <link rel="stylesheet" href="./phase-c.css" />
 </head>
 <body>
   <div class="shell">
     <aside class="sidebar">
-      <a class="brand" href="#command" data-route="command" aria-label="Paydirt command center">
-        <span class="brand-mark">◆</span><span>PAYDIRT</span>
-      </a>
+      <a class="brand" href="#command" data-route="command" aria-label="Paydirt command center"><span class="brand-mark">◆</span><span>PAYDIRT</span></a>
       <nav class="nav" aria-label="Primary">
         <button class="nav-item active" data-route="command"><span>01</span>Command</button>
         <button class="nav-item" data-route="inbox"><span>02</span>Inbox <b id="nav-inbox-count">—</b></button>
@@ -24,77 +23,24 @@
         <button class="nav-item" data-route="workspace"><span>04</span>Workspace</button>
         <button class="nav-item" data-route="portfolio"><span>05</span>Portfolio</button>
       </nav>
-      <div class="sidebar-foot">
-        <span id="system-status" class="system-status"><i></i>CONNECTING</span>
-        <a href="https://github.com/michaelcolenso/paydirt" target="_blank" rel="noreferrer">SOURCE ↗</a>
-      </div>
+      <div class="sidebar-foot"><span id="system-status" class="system-status"><i></i>CONNECTING</span><a href="https://github.com/michaelcolenso/paydirt" target="_blank" rel="noreferrer">SOURCE ↗</a></div>
     </aside>
-
     <div class="main-shell">
-      <header class="topbar">
-        <div><span class="crumb">PAYDIRT /</span> <strong id="page-title">COMMAND CENTER</strong></div>
-        <div class="topbar-right"><span id="run-date">Loading state…</span><span id="framework-version">FRAMEWORK —</span></div>
-      </header>
-
+      <header class="topbar"><div><span class="crumb">PAYDIRT /</span> <strong id="page-title">COMMAND CENTER</strong></div><div class="topbar-right"><span id="run-date">Loading state…</span><span id="framework-version">FRAMEWORK —</span></div></header>
       <main>
         <section class="view active" id="view-command" data-view="command">
-          <div class="page-head">
-            <div><p class="eyebrow">OPPORTUNITY INTELLIGENCE</p><h1>What deserves<br><em>attention now?</em></h1></div>
-            <p class="lede">Discovery machinery finds signals. Paydirt turns them into explicit decisions, preserving the evidence behind every bet.</p>
-          </div>
-
-          <div class="metric-strip">
-            <article><span>NEW LEADS</span><strong id="metric-leads">—</strong><small>awaiting triage</small></article>
-            <article><span>OPPORTUNITIES</span><strong id="metric-opps">—</strong><small>active pipeline</small></article>
-            <article><span>BUILD RECOMMENDED</span><strong id="metric-build">—</strong><small>need a decision</small></article>
-            <article><span>PORTFOLIO</span><strong id="metric-products">—</strong><small>approved products</small></article>
-          </div>
-
-          <div class="command-grid">
-            <section class="panel priority-panel">
-              <div class="panel-head"><div><p class="eyebrow">DECISION QUEUE</p><h2>Highest-value signals</h2></div><button class="text-button" data-jump="pipeline">OPEN PIPELINE →</button></div>
-              <div id="priority-list" class="priority-list"></div>
-            </section>
-            <section class="panel activity-panel">
-              <div class="panel-head"><div><p class="eyebrow">SYSTEM ACTIVITY</p><h2>Recent runs</h2></div></div>
-              <div id="run-list" class="run-list"></div>
-            </section>
-          </div>
-
-          <section class="panel inbox-preview">
-            <div class="panel-head"><div><p class="eyebrow">INBOX</p><h2>Fresh dataset leads</h2></div><button class="text-button" data-jump="inbox">TRIAGE LEADS →</button></div>
-            <div id="lead-preview" class="lead-table"></div>
-          </section>
+          <div class="page-head"><div><p class="eyebrow">OPPORTUNITY INTELLIGENCE</p><h1>What deserves<br><em>attention now?</em></h1></div><p class="lede">Discovery machinery finds signals. Paydirt turns them into explicit decisions, preserving the evidence behind every bet.</p></div>
+          <div class="metric-strip"><article><span>NEW LEADS</span><strong id="metric-leads">—</strong><small>awaiting triage</small></article><article><span>OPPORTUNITIES</span><strong id="metric-opps">—</strong><small>active pipeline</small></article><article><span>BUILD RECOMMENDED</span><strong id="metric-build">—</strong><small>need a decision</small></article><article><span>PORTFOLIO</span><strong id="metric-products">—</strong><small>approved products</small></article></div>
+          <div class="command-grid"><section class="panel priority-panel"><div class="panel-head"><div><p class="eyebrow">DECISION QUEUE</p><h2>Highest-value signals</h2></div><button class="text-button" data-jump="pipeline">OPEN PIPELINE →</button></div><div id="priority-list" class="priority-list"></div></section><section class="panel activity-panel"><div class="panel-head"><div><p class="eyebrow">SYSTEM ACTIVITY</p><h2>Recent runs</h2></div></div><div id="run-list" class="run-list"></div></section></div>
+          <section class="panel inbox-preview"><div class="panel-head"><div><p class="eyebrow">INBOX</p><h2>Fresh dataset leads</h2></div><button class="text-button" data-jump="inbox">TRIAGE LEADS →</button></div><div id="lead-preview" class="lead-table"></div></section>
         </section>
-
-        <section class="view" id="view-inbox" data-view="inbox">
-          <div class="section-head"><div><p class="eyebrow">MACHINE FOUND / HUMAN TRIAGED</p><h1>Lead inbox</h1></div><p>Raw discoveries live here until promoted into real opportunities. A scanner score is not a product decision.</p></div>
-          <div class="toolbar"><input id="lead-search" type="search" placeholder="Search datasets, agencies, sources…" /><span id="lead-count">— leads</span></div>
-          <div id="lead-list" class="lead-list"></div>
-        </section>
-
-        <section class="view" id="view-pipeline" data-view="pipeline">
-          <div class="section-head"><div><p class="eyebrow">LIFECYCLE / NOT JUST SCORE</p><h1>Opportunity pipeline</h1></div><p>Recommendation and lifecycle are intentionally separate. BUILD RECOMMENDED still waits for an explicit human promotion.</p></div>
-          <div class="toolbar"><input id="opp-search" type="search" placeholder="Search opportunities…" /><div id="pipeline-filters" class="filters"><button class="active" data-filter="ALL">All</button><button data-filter="BUILD_RECOMMENDED">Build rec.</button><button data-filter="BACKLOG">Backlog</button><button data-filter="KILL_RECOMMENDED">Kill rec.</button></div></div>
-          <div class="pipeline-board">
-            <div class="pipeline-head"><span>OPPORTUNITY</span><span>STATE</span><span>RECOMMENDATION</span><span>SCORE</span><span>UPDATED</span><span></span></div>
-            <div id="opportunity-list"></div>
-          </div>
-        </section>
-
-        <section class="view" id="view-workspace" data-view="workspace">
-          <div id="workspace-empty" class="workspace-empty"><span class="brand-mark large">◆</span><h2>Select an opportunity</h2><p>Open an opportunity from Command or Pipeline to inspect its evidence, score snapshot, and decision history.</p></div>
-          <div id="workspace-content" class="workspace-content" hidden></div>
-        </section>
-
-        <section class="view" id="view-portfolio" data-view="portfolio">
-          <div class="section-head"><div><p class="eyebrow">APPROVED BETS ONLY</p><h1>Portfolio</h1></div><p>Products arrive here only after an explicit promotion. Recommendations never mutate the portfolio automatically.</p></div>
-          <div id="portfolio-grid" class="portfolio-grid"></div>
-        </section>
+        <section class="view" id="view-inbox" data-view="inbox"><div class="section-head"><div><p class="eyebrow">MACHINE FOUND / HUMAN TRIAGED</p><h1>Lead inbox</h1></div><p>Raw discoveries live here until promoted into real opportunities. A scanner score is not a product decision.</p></div><div class="toolbar"><input id="lead-search" type="search" placeholder="Search datasets, agencies, sources…" /><span id="lead-count">— leads</span></div><div id="lead-list" class="lead-list"></div></section>
+        <section class="view" id="view-pipeline" data-view="pipeline"><div class="section-head"><div><p class="eyebrow">LIFECYCLE / NOT JUST SCORE</p><h1>Opportunity pipeline</h1></div><p>Recommendation and lifecycle are intentionally separate. BUILD RECOMMENDED still waits for an explicit human promotion.</p></div><div class="toolbar"><input id="opp-search" type="search" placeholder="Search opportunities…" /><div id="pipeline-filters" class="filters"><button class="active" data-filter="ALL">All</button><button data-filter="BUILD_RECOMMENDED">Build rec.</button><button data-filter="BACKLOG">Backlog</button><button data-filter="KILL_RECOMMENDED">Kill rec.</button></div></div><div class="pipeline-board"><div class="pipeline-head"><span>OPPORTUNITY</span><span>STATE</span><span>RECOMMENDATION</span><span>SCORE</span><span>UPDATED</span><span></span></div><div id="opportunity-list"></div></div></section>
+        <section class="view" id="view-workspace" data-view="workspace"><div id="workspace-empty" class="workspace-empty"><span class="brand-mark large">◆</span><h2>Select an opportunity</h2><p>Open an opportunity from Command or Pipeline to inspect its evidence, score snapshot, and decision history.</p></div><div id="workspace-content" class="workspace-content" hidden></div></section>
+        <section class="view" id="view-portfolio" data-view="portfolio"><div class="section-head"><div><p class="eyebrow">APPROVED BETS ONLY</p><h1>Portfolio</h1></div><p>Products arrive here only after an explicit promotion. Recommendations never mutate the portfolio automatically.</p></div><div id="portfolio-grid" class="portfolio-grid"></div></section>
       </main>
     </div>
   </div>
-
   <script type="module" src="./app.js"></script>
 </body>
 </html>
