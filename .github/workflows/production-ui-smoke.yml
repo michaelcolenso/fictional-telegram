@@ -1,0 +1,107 @@
+name: Production UI Smoke
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'tests/production-ui-smoke.mjs'
+      - '.github/workflows/production-ui-smoke.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: production
+    env:
+      PAYDIRT_URL: https://paydirt.aged-morning-c8e4.workers.dev
+      PAYDIRT_ADMIN_TOKEN: ${{ secrets.PAYDIRT_ADMIN_TOKEN }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      TEST_PREFIX: UI-SMOKE-${{ github.run_id }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: |
+          npm install --package-lock=false
+          npm install --no-save playwright
+          npx playwright install --with-deps chromium webkit
+
+      - name: Resolve production D1 and prepare config
+        id: d1
+        shell: bash
+        run: |
+          DATABASE_ID="$(npx wrangler d1 list --json | node -e '
+            let s=""; process.stdin.on("data",d=>s+=d).on("end",()=>{
+              const rows=JSON.parse(s); const db=rows.find(x=>x.name==="paydirt");
+              if(db) process.stdout.write(db.uuid || db.id || "");
+            });
+          ')"
+          test -n "$DATABASE_ID"
+          echo "database_id=$DATABASE_ID" >> "$GITHUB_OUTPUT"
+          DATABASE_ID="$DATABASE_ID" node - <<'NODE'
+          const fs=require('fs');
+          let source=fs.readFileSync('wrangler.jsonc','utf8');
+          source=source.replace('00000000-0000-0000-0000-000000000000', process.env.DATABASE_ID);
+          fs.writeFileSync('.wrangler.smoke.jsonc', source);
+          NODE
+
+      - name: Seed disposable UI records
+        shell: bash
+        run: |
+          cat > .ui-smoke-seed.sql <<SQL
+          INSERT OR IGNORE INTO sources(id,name,kind,url) VALUES ('$TEST_PREFIX-source','$TEST_PREFIX Source','smoke','https://example.com/data.json');
+          INSERT INTO opportunities(id,name,lifecycle_state,recommendation,primary_vertical,query_pattern,monetization_model,data_source_name,data_source_url,data_format,update_frequency,entity_count,licensing,build_notes)
+            VALUES ('$TEST_PREFIX-flow','$TEST_PREFIX Lifecycle','SCORED','BUILD_RECOMMENDED','smoke','[thing] lookup','ads','$TEST_PREFIX Source','https://example.com/data.json','JSON','daily',1000,'test','Disposable lifecycle smoke record');
+          INSERT INTO opportunities(id,name,lifecycle_state,recommendation,primary_vertical,query_pattern,monetization_model,data_source_name,data_source_url,data_format,update_frequency,entity_count,licensing,build_notes)
+            VALUES ('$TEST_PREFIX-research','$TEST_PREFIX Research','SCORED','BACKLOG','smoke','[thing] research','ads','$TEST_PREFIX Source','https://example.com/data.json','JSON','daily',1000,'test','Disposable research smoke record');
+          INSERT INTO opportunities(id,name,lifecycle_state,recommendation,primary_vertical,query_pattern,monetization_model,data_source_name,data_source_url,data_format,update_frequency,entity_count,licensing,build_notes)
+            VALUES ('$TEST_PREFIX-spec','$TEST_PREFIX Spec','SCORED','BUILD_RECOMMENDED','smoke','[thing] spec','ads','$TEST_PREFIX Source','https://example.com/data.json','JSON','daily',1000,'test','Disposable build spec smoke record');
+          INSERT INTO score_snapshots(id,opportunity_id,framework_version,data_quality,search_demand,competition_gap,monetization_clarity,build_feasibility,defensibility,composite,recommendation,rationale_json)
+            VALUES ('$TEST_PREFIX-flow-score','$TEST_PREFIX-flow','smoke',8,7,8,7,9,7,7.67,'BUILD_RECOMMENDED','{}');
+          INSERT INTO score_snapshots(id,opportunity_id,framework_version,data_quality,search_demand,competition_gap,monetization_clarity,build_feasibility,defensibility,composite,recommendation,rationale_json)
+            VALUES ('$TEST_PREFIX-research-score','$TEST_PREFIX-research','smoke',6,6,6,6,6,6,6,'BACKLOG','{}');
+          INSERT INTO score_snapshots(id,opportunity_id,framework_version,data_quality,search_demand,competition_gap,monetization_clarity,build_feasibility,defensibility,composite,recommendation,rationale_json)
+            VALUES ('$TEST_PREFIX-spec-score','$TEST_PREFIX-spec','smoke',8,8,8,8,8,8,8,'BUILD_RECOMMENDED','{}');
+          INSERT INTO leads(id,source_id,title,description,data_url,organization,formats_json,entity_count_estimate,scanner_score,status)
+            VALUES ('$TEST_PREFIX-promote-lead','$TEST_PREFIX-source','$TEST_PREFIX Promote Lead','Disposable promote smoke lead','https://example.com/data.json','Smoke Org','["JSON"]',1000,8.2,'NEW');
+          INSERT INTO leads(id,source_id,title,description,data_url,organization,formats_json,entity_count_estimate,scanner_score,status)
+            VALUES ('$TEST_PREFIX-dismiss-lead','$TEST_PREFIX-source','$TEST_PREFIX Dismiss Lead','Disposable dismiss smoke lead','https://example.com/data.json','Smoke Org','["JSON"]',1000,6.2,'NEW');
+          SQL
+          npx wrangler d1 execute paydirt --remote --config .wrangler.smoke.jsonc --file=.ui-smoke-seed.sql
+
+      - name: Run production browser smoke suite
+        run: node tests/production-ui-smoke.mjs
+
+      - name: Capture current workflow runs
+        if: always()
+        run: |
+          curl -fsS "$PAYDIRT_URL/api/runs" | head -c 12000 || true
+
+      - name: Cleanup disposable UI records
+        if: always()
+        shell: bash
+        run: |
+          cat > .ui-smoke-clean.sql <<SQL
+          DELETE FROM build_specs WHERE opportunity_id IN (SELECT id FROM opportunities WHERE name LIKE '$TEST_PREFIX%');
+          DELETE FROM products WHERE origin_opportunity_id IN (SELECT id FROM opportunities WHERE name LIKE '$TEST_PREFIX%');
+          DELETE FROM evidence WHERE opportunity_id IN (SELECT id FROM opportunities WHERE name LIKE '$TEST_PREFIX%');
+          DELETE FROM score_snapshots WHERE opportunity_id IN (SELECT id FROM opportunities WHERE name LIKE '$TEST_PREFIX%');
+          DELETE FROM decisions WHERE opportunity_id IN (SELECT id FROM opportunities WHERE name LIKE '$TEST_PREFIX%');
+          DELETE FROM runs WHERE opportunity_id IN (SELECT id FROM opportunities WHERE name LIKE '$TEST_PREFIX%');
+          DELETE FROM lead_decisions WHERE lead_id IN (SELECT id FROM leads WHERE title LIKE '$TEST_PREFIX%');
+          UPDATE leads SET promoted_opportunity_id=NULL WHERE title LIKE '$TEST_PREFIX%';
+          DELETE FROM leads WHERE title LIKE '$TEST_PREFIX%';
+          DELETE FROM opportunities WHERE name LIKE '$TEST_PREFIX%';
+          DELETE FROM sources WHERE id='$TEST_PREFIX-source';
+          SQL
+          npx wrangler d1 execute paydirt --remote --config .wrangler.smoke.jsonc --file=.ui-smoke-clean.sql
