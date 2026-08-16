@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#0b0c0d" />
+  <meta name="description" content="Paydirt opportunity discovery command center" />
+  <title>Paydirt — Opportunity Command Center</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <a class="brand" href="#" aria-label="Paydirt home">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 40 40" role="img"><path d="M7 8h26l-4.2 7H11.2L7 8Zm5.4 10h15.2l-2.8 5H15.2l-2.8-5Zm4 8h7.2L20 32l-3.6-6Z" fill="currentColor"/></svg>
+        </span>
+        <span>PAYDIRT</span>
+      </a>
+      <div class="topbar-meta">
+        <span class="run-status"><i></i><span id="run-date">Loading run…</span></span>
+        <a class="ghost-button" href="https://github.com/michaelcolenso/paydirt" target="_blank" rel="noreferrer">GitHub ↗</a>
+      </div>
+    </header>
+
+    <main>
+      <section class="hero">
+        <div>
+          <p class="eyebrow">OPPORTUNITY DISCOVERY / COMMAND CENTER</p>
+          <h1>Find the gap.<br><span>Mine the value.</span></h1>
+          <p class="hero-copy">Free public data in. Evidence-backed businesses out. Rank the opportunities, kill the weak ones, and put build capital behind the survivors.</p>
+        </div>
+        <div class="hero-score" aria-label="Top opportunity score">
+          <div class="score-ring" id="top-score-ring">
+            <span id="top-score">—</span>
+            <small>/ 10</small>
+          </div>
+          <div>
+            <span class="micro-label">TOP SIGNAL</span>
+            <strong id="top-opportunity">Scanning…</strong>
+            <span id="top-verdict" class="tag">—</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="metrics-grid" aria-label="Pipeline metrics">
+        <article class="metric-card"><span class="micro-label">OPPORTUNITIES</span><strong id="metric-total">—</strong><small>in latest pipeline</small></article>
+        <article class="metric-card"><span class="micro-label">BUILD</span><strong id="metric-build">—</strong><small>cleared for execution</small></article>
+        <article class="metric-card"><span class="micro-label">AVG SCORE</span><strong id="metric-average">—</strong><small>surviving candidates</small></article>
+        <article class="metric-card"><span class="micro-label">PORTFOLIO</span><strong id="metric-portfolio">—</strong><small>tracked products</small></article>
+      </section>
+
+      <section class="workspace">
+        <div class="workspace-head">
+          <div>
+            <p class="eyebrow">RANKED PIPELINE</p>
+            <h2>Opportunity board</h2>
+          </div>
+          <div class="controls">
+            <label class="search-box">
+              <span aria-hidden="true">⌕</span>
+              <input id="search" type="search" placeholder="Search opportunities" autocomplete="off" />
+            </label>
+            <div class="filter-group" role="group" aria-label="Filter opportunities">
+              <button class="filter active" data-filter="ALL">All</button>
+              <button class="filter" data-filter="BUILD">Build</button>
+              <button class="filter" data-filter="BACKLOG">Backlog</button>
+              <button class="filter" data-filter="KILL">Kill</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="pipeline-layout">
+          <div id="opportunity-list" class="opportunity-list" aria-live="polite"></div>
+          <aside id="detail-panel" class="detail-panel">
+            <div class="detail-empty">
+              <span class="brand-mark large" aria-hidden="true">
+                <svg viewBox="0 0 40 40"><path d="M7 8h26l-4.2 7H11.2L7 8Zm5.4 10h15.2l-2.8 5H15.2l-2.8-5Zm4 8h7.2L20 32l-3.6-6Z" fill="currentColor"/></svg>
+              </span>
+              <p>Select an opportunity to inspect the evidence.</p>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <section class="portfolio-section">
+        <div class="workspace-head">
+          <div><p class="eyebrow">PORTFOLIO STATE</p><h2>What we already own</h2></div>
+          <p class="section-note">Reserved data sources and active bets are visible here so discovery doesn’t cannibalize existing territory.</p>
+        </div>
+        <div id="portfolio-grid" class="portfolio-grid"></div>
+      </section>
+    </main>
+
+    <footer>
+      <span>PAYDIRT / OPPORTUNITY DISCOVERY FRAMEWORK</span>
+      <span id="framework-version">FRAMEWORK V2</span>
+    </footer>
+  </div>
+
+  <template id="opportunity-template">
+    <button class="opportunity-row">
+      <span class="rank"></span>
+      <span class="opportunity-main"><strong class="opportunity-name"></strong><small class="opportunity-source"></small></span>
+      <span class="signal-cell"><small>DEMAND</small><strong class="demand-value"></strong></span>
+      <span class="signal-cell"><small>DATA</small><strong class="data-value"></strong></span>
+      <span class="verdict tag"></span>
+      <span class="composite"></span>
+      <span class="arrow">→</span>
+    </button>
+  </template>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
