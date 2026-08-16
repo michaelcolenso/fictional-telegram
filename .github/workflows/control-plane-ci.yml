@@ -6,8 +6,8 @@ on:
       - 'src/**'
       - 'ui/**'
       - 'migrations/**'
-      - 'scripts/import_legacy.py'
-      - 'config/scoring-policy.json'
+      - 'scripts/**'
+      - 'config/**'
       - 'package.json'
       - 'wrangler.jsonc'
       - 'tsconfig.json'
@@ -17,7 +17,7 @@ on:
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
 
@@ -32,9 +32,10 @@ jobs:
       - name: Install dependencies
         run: npm install --package-lock=false
 
-      - name: Validate legacy importer
+      - name: Validate importer and UI
         run: |
           python -m py_compile scripts/import_legacy.py
+          node --check ui/app.js
           python scripts/import_legacy.py > .paydirt-legacy-import.sql
           test -s .paydirt-legacy-import.sql
 
@@ -46,3 +47,34 @@ jobs:
 
       - name: Typecheck Worker
         run: npm run typecheck
+
+      - name: Exercise Phase C API
+        shell: bash
+        run: |
+          printf 'PAYDIRT_ADMIN_TOKEN="ci-admin-token"\n' > .dev.vars
+          npx wrangler dev --port 8787 > /tmp/paydirt-wrangler.log 2>&1 &
+          WRANGLER_PID=$!
+          trap 'kill $WRANGLER_PID || true; cat /tmp/paydirt-wrangler.log' EXIT
+          for i in {1..30}; do
+            curl -fsS http://127.0.0.1:8787/api/health >/dev/null && break
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:8787/api/health | grep '"mutations":true'
+
+          LEAD_ID=$(curl -fsS http://127.0.0.1:8787/api/leads | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const x=JSON.parse(s).leads.find(l=>!l.reserved);if(x)process.stdout.write(x.id)})')
+          if [ -n "$LEAD_ID" ]; then
+            curl -fsS -X POST "http://127.0.0.1:8787/api/leads/$LEAD_ID/promote" \
+              -H 'Authorization: Bearer ci-admin-token' -H 'Content-Type: application/json' \
+              --data '{"reason":"CI promotion"}' | grep '"ok":true'
+          fi
+
+          OPP_ID=$(curl -fsS http://127.0.0.1:8787/api/opportunities | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const xs=JSON.parse(s).opportunities;const x=xs.find(o=>["SCORED","RESEARCHING","BACKLOG"].includes(o.lifecycle_state));if(x)process.stdout.write(x.id)})')
+          test -n "$OPP_ID"
+          curl -fsS -X POST "http://127.0.0.1:8787/api/opportunities/$OPP_ID/rescore" \
+            -H 'Authorization: Bearer ci-admin-token' -H 'Content-Type: application/json' --data '{}' | grep '"ok":true'
+          curl -fsS -X POST "http://127.0.0.1:8787/api/opportunities/$OPP_ID/build-spec" \
+            -H 'Authorization: Bearer ci-admin-token' -H 'Content-Type: application/json' --data '{}' | grep '"content"'
+          curl -fsS -X POST "http://127.0.0.1:8787/api/opportunities/$OPP_ID/decision" \
+            -H 'Authorization: Bearer ci-admin-token' -H 'Content-Type: application/json' \
+            --data '{"action":"APPROVE","reason":"CI approval"}' | grep '"to":"APPROVED"'
+          curl -fsS http://127.0.0.1:8787/api/portfolio | grep "$OPP_ID"
